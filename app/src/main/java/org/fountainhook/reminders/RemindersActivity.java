@@ -1,7 +1,11 @@
 package org.fountainhook.reminders;
 
+import android.app.AlarmManager;
 import android.app.Dialog;
+import android.app.PendingIntent;
 import android.app.TimePickerDialog;
+import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
 import android.os.Build;
 import android.os.Bundle;
@@ -24,6 +28,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.TimePicker;
 import android.widget.Toast;
 
 import java.sql.SQLException;
@@ -82,6 +87,8 @@ public class RemindersActivity extends AppCompatActivity {
             public void onItemClick(AdapterView<?> parent, View view, final int masterListPosition, long id) {
                 AlertDialog.Builder builder = new AlertDialog.Builder(RemindersActivity.this);
                 ListView modeListView = new ListView(RemindersActivity.this);
+                int nId = getIdFromPosition(masterListPosition);
+                final Reminder reminder = mDbAdapter.fetchReminderById(nId);
                 String[] modes = new String[]{"Edit reminder", "Delete Reminder", "Schedule Reminder"};
                 ArrayAdapter<String> modeAdapter = new ArrayAdapter<>(RemindersActivity.this, android.R.layout.simple_list_item_1, android.R.id.text1, modes);
                 modeListView.setAdapter(modeAdapter);
@@ -93,8 +100,6 @@ public class RemindersActivity extends AppCompatActivity {
                     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                         //edit reminder
                         if (position == 0) {
-                            int nId = getIdFromPosition(masterListPosition);
-                            Reminder reminder = mDbAdapter.fetchReminderById(nId);
                             fireCustomDialog(reminder);
                             //schedule reminder
                         } else if (position == 1)
@@ -105,8 +110,17 @@ public class RemindersActivity extends AppCompatActivity {
                         //delete reminder
                         else
                         {
-                            Date today = new Date();
-                            new TimePickerDialog(RemindersActivity.this, null, today.getHours(), today.getMinutes(), false).show();
+                            final Date today = new Date();
+                            TimePickerDialog.OnTimeSetListener listener = new TimePickerDialog.OnTimeSetListener()
+                            {
+                                @Override
+                                public void onTimeSet(TimePicker view, int hour, int minute)
+                                {
+                                    Date alarm = new Date(today.getYear(),today.getMonth(),today.getDate(), hour, minute);
+                                    scheduleReminder(alarm.getTime(), reminder.getContent());
+                                }
+                            };
+                            new TimePickerDialog(RemindersActivity.this,null,today.getHours(),today.getMinutes(),false).show();
                         }
                         dialog.dismiss();
                     }
@@ -158,6 +172,15 @@ public class RemindersActivity extends AppCompatActivity {
                }
            });
         }
+    }
+
+    private void scheduleReminder(long time, String content)
+    {
+        AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+        Intent alarmIntent = new Intent(this, ReminderAlarmReceiver.class);
+        alarmIntent.putExtra(ReminderAlarmReceiver.REMINDER_TEXT, content);
+        PendingIntent broadcast = PendingIntent.getBroadcast(this, 0, alarmIntent, 0);
+        alarmManager.set(AlarmManager.RTC_WAKEUP, time, broadcast);
     }
 
     private int getIdFromPosition(int nC) {
